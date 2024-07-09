@@ -1,9 +1,6 @@
 # app.py
 import logging
-
 from flask import Flask
-
-import views.admin
 from views.admin import admin_bp
 from views.user import user_bp
 

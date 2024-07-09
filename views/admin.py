@@ -6,14 +6,14 @@ from flask import Blueprint, request, url_for
 admin_bp = Blueprint('admin', __name__)
 
 
+@admin_bp.route('/')
+def admin_name_home():
+    return "test/index"
+
+
 @admin_bp.route('/admin')
 def admin_home():
     return 'Admin Home Page'
-
-
-@admin_bp.route('/')
-def admin_name_home():
-    return "admin_name_home"
 
 
 @admin_bp.app_errorhandler(404)
