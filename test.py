@@ -1,15 +1,27 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base
+from markupsafe import escape
+from flask import Flask
 
-engine = create_engine('sqlite:////tmp/test.db')
-db_session = scoped_session(sessionmaker(autocommit=False,
-                                         autoflush=False,
-                                         bind=engine))
-Base = declarative_base()
-Base.query = db_session.query_property()
+from flask import Blueprint, render_template, abort
+from jinja2 import TemplateNotFound
 
-def init_db():
-    # import all modules here that might define models so that
-    # they will be registered properly on the metadata.  Otherwise
-    # you will have to import them first before calling init_db()
-    Base.metadata.create_all(bind=engine)
+simple_page = Blueprint('simple_page', __name__,
+                        template_folder='static')
+
+@simple_page.route('/', defaults={'page': 'index'})
+@simple_page.route('/<page>')
+def show(page):
+    try:
+        return render_template(f'page/{page}.html')
+    except TemplateNotFound:
+        abort(404)
+
+
+app = Flask(__name__)
+app.register_blueprint(simple_page)
+# @app.route("/<name>")
+# def hello(name):
+#     # return f"Hello, {name}!"
+#     return f"Hello, {escape(name)}!"
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', debug=True)
