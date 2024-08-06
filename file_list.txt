@@ -1,0 +1,2 @@
+file 'D:\Documents\PycharmProjects\appFlask\segment_0.ts'
+file 'D:\Documents\PycharmProjects\appFlask\segment_1.ts'

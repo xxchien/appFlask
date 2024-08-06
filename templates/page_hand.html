@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Analog Watch with Timezone</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 1em;
+            min-height: 100vh;
+            background-color: #1d1e22;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+        }
+        .watch {
+            position: relative;
+            width: 20vmin;
+            height: 20vmin;
+            border: 2px solid white;
+            border-radius: 50%;
+            background: black;
+            box-shadow: inset 0 0 0 0.5em black,
+                        inset 0 0 1rem 1em hsl(0 0% 100% / 0.25);
+        }
+        .hand {
+            position: absolute;
+            width: 50%;
+            height: 2px;
+            background: white;
+            top: 50%;
+            transform-origin: 100%;
+            transform: rotate(90deg);
+            transition: transform 0.1s ease-in-out;
+        }
+        .hour-hand {
+            height: 4px;
+        }
+        .center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 1vmin;
+            height: 1vmin;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .timezone-selector {
+            margin-top: 1em;
+            font-size: 1em;
+            padding: 0.5em;
+        }
+    </style>
+</head>
+<body>
+    <div class="watch">
+        <div class="hand hour-hand" id="hour-hand"></div>
+        <div class="hand minute-hand" id="minute-hand"></div>
+        <div class="hand second-hand" id="second-hand"></div>
+        <div class="center"></div>
+    </div>
+
+    <select class="timezone-selector" id="timezone-selector">
+        <option value="-12">UTC-12:00</option>
+        <option value="-11">UTC-11:00</option>
+        <option value="-10">UTC-10:00</option>
+        <option value="-9">UTC-09:00</option>
+        <option value="-8">UTC-08:00</option>
+        <option value="-7">UTC-07:00</option>
+        <option value="-6">UTC-06:00</option>
+        <option value="-5">UTC-05:00</option>
+        <option value="-4">UTC-04:00</option>
+        <option value="-3">UTC-03:00</option>
+        <option value="-2">UTC-02:00</option>
+        <option value="-1">UTC-01:00</option>
+        <option value="0" selected>UTC</option>
+        <option value="1">UTC+01:00</option>
+        <option value="2">UTC+02:00</option>
+        <option value="3">UTC+03:00</option>
+        <option value="4">UTC+04:00</option>
+        <option value="5">UTC+05:00</option>
+        <option value="6">UTC+06:00</option>
+        <option value="7">UTC+07:00</option>
+        <option value="8">UTC+08:00</option>
+        <option value="9">UTC+09:00</option>
+        <option value="10">UTC+10:00</option>
+        <option value="11">UTC+11:00</option>
+        <option value="12">UTC+12:00</option>
+    </select>
+
+    <script>
+        const hourHand = document.getElementById('hour-hand');
+        const minuteHand = document.getElementById('minute-hand');
+        const secondHand = document.getElementById('second-hand');
+        const timezoneSelector = document.getElementById('timezone-selector');
+
+        function setRotation(element, rotationRatio) {
+            element.style.transform = `rotate(${rotationRatio * 360}deg)`;
+        }
+
+        function updateClock() {
+            const timezoneOffset = parseInt(timezoneSelector.value);
+            const currentDate = new Date(new Date().toLocaleString("en-US", {timeZone: `Etc/GMT${timezoneOffset > 0 ? '-' + timezoneOffset : '+' + Math.abs(timezoneOffset)}`}));
+
+            const secondsRatio = currentDate.getSeconds() / 60;
+            const minutesRatio = (secondsRatio + currentDate.getMinutes()) / 60;
+            const hoursRatio = (minutesRatio + currentDate.getHours()) / 12;
+
+            setRotation(secondHand, secondsRatio);
+            setRotation(minuteHand, minutesRatio);
+            setRotation(hourHand, hoursRatio);
+
+            requestAnimationFrame(updateClock);
+        }
+
+        timezoneSelector.addEventListener('change', updateClock);
+        updateClock();
+    </script>
+</body>
+</html>

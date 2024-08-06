@@ -252,7 +252,6 @@
 
    4. commit
 
-
 ### Flask
 
 1. 配置Flask
@@ -284,6 +283,10 @@
       pip          24.0
       Werkzeug     3.0.3
       `````
+
+
+
+---
 
 
 
@@ -842,11 +845,130 @@ def not_found(error):
     return resp
 ```
 
+#### 使用 JSON 的 API
+
+在编写 API 时，JSON 是一种常见的响应格式。使用 Flask 编写这样的 API 很简单。如果你从视图中返回一个 `dict` 或 `list`，它会被转换为 JSON 响应。
+
+```python
+@app.route("/me")
+def me_api():
+    user = get_current_user()
+    return {
+        "username": user.username,
+        "theme": user.theme,
+        "image": url_for("user_image", filename=user.image),
+    }
+
+@app.route("/users")
+def users_api():
+    users = get_all_users()
+    return [user.to_json() for user in users]
+```
+
+这是将数据传递给 [`jsonify()`](https://flask.palletsprojects.com/en/3.0.x/api/#flask.json.jsonify) 函数的快捷方式，该函数会序列化任何支持的 JSON 数据类型。这意味着 `dict` 或 `list` 中的所有数据必须是 JSON 可序列化的。
+
+对于复杂类型，例如数据库模型，你可能需要使用序列化库来先将数据转换为有效的 JSON 类型。社区中有许多序列化库和 Flask API 扩展，支持更复杂的应用程序。
+
+### 会话（Sessions）
+
+除了请求对象外，还有一个名为 [`session`](https://flask.palletsprojects.com/en/3.0.x/api/#flask.session) 的对象，它允许您在一次请求到下一次请求之间存储特定于用户的信息。这是基于 cookies 实现的，并且会对 cookies 进行加密签名。这意味着用户可以查看 cookie 的内容，但不能修改它，除非他们知道用于签名的秘密密钥。
+
+为了使用会话，您必须设置一个秘密密钥。会话的工作方式如下：
+
+```python
+from flask import session
+
+# 将秘密密钥设置为一些随机字节。请务必保密！
+app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+
+@app.route('/')
+def index():
+    if 'username' in session:
+        return f'Logged in as {session["username"]}'
+    return 'You are not logged in'
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        session['username'] = request.form['username']
+        return redirect(url_for('index'))
+    return '''
+        <form method="post">
+            <p><input type=text name=username>
+            <p><input type=submit value=Login>
+        </form>
+    '''
+
+@app.route('/logout')
+def logout():
+    # 如果会话中存在用户名，则将其删除
+    session.pop('username', None)
+    return redirect(url_for('index'))
+```
+
+如何生成好的秘密密钥
+
+秘密密钥应该尽可能随机。您的操作系统有生成基于加密随机生成器的相当随机数据的方法。使用以下命令可以快速生成一个值（或 [`SECRET_KEY`](https://flask.palletsprojects.com/en/3.0.x/config/#SECRET_KEY)）：**Flask.secret_key**
+
+```bash
+$ python -c 'import secrets; print(secrets.token_hex())'
+'192b9bdd22ab9ed4d12e236c78afcb9a393ec15f71bbf5dc987d54727823bcbf'
+```
+
+关于基于 cookies 的会话的说明：Flask 会将您放入会话对象中的值序列化到 cookie 中。如果您发现一些值在请求之间无法持久化，cookies 已启用，并且没有清晰的错误消息，请检查页面响应中 cookie 的大小与 Web 浏览器支持的大小比较。
+
+除了默认的客户端侧会话外，如果您想在服务器端处理会话，还可以使用一些支持此功能的 Flask 扩展。
+
+### 消息闪现
+
+优秀的应用程序和用户界面都注重反馈。如果用户没有得到足够的反馈，他们可能最终会讨厌这个应用程序。Flask 提供了一种非常简单的方式通过闪现系统来向用户提供反馈。闪现系统基本上使得在请求结束时记录一条消息并在下一次（且仅限下一次）请求时访问它成为可能。这通常与布局模板结合使用以显示消息。
+
+要闪现一条消息，请使用 [`flash()`](https://flask.palletsprojects.com/en/3.0.x/api/#flask.flash) 方法，要获取这些消息，可以使用 [`get_flashed_messages()`](https://flask.palletsprojects.com/en/3.0.x/api/#flask.get_flashed_messages) 方法，该方法在模板中也可用。有关完整示例，请参见 [消息闪现](https://flask.palletsprojects.com/en/3.0.x/patterns/flashing/)。
+
+### 日志记录
+
+<details class="changelog" open="" style="color: rgb(62, 67, 73); font-family: Garamond, Georgia, serif; font-size: 17px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;"><summary style="cursor: pointer; font-style: italic; margin-bottom: 10px;">更新日志</summary><div class="versionadded"><p style="hyphens: auto; line-height: 1.4;"><span class="versionmodified added" style="font-style: italic;">新功能于 0.3 版本添加。</span></p></div></details>
+
+有时您可能会遇到处理的数据应该是正确的，但实际上并非如此。例如，您可能有一些客户端代码发送 HTTP 请求到服务器，但显然格式错误。这可能是由于用户篡改数据或客户端代码失败引起的。在大多数情况下，回复 `400 Bad Request` 是可以的，但有时这并不足够，代码必须继续工作。
+
+您可能仍然希望记录下发生了一些可疑的事情。这时日志记录器就派上用场了。从 Flask 0.3 开始，日志记录器已经为您预配置好。
+
+以下是一些示例日志调用：
+
+```python
+app.logger.debug('A value for debugging')
+app.logger.warning('A warning occurred (%d apples)', 42)
+app.logger.error('An error occurred')
+```
+
+附带的 [`logger`](https://flask.palletsprojects.com/en/3.0.x/api/#flask.Flask.logger) 是一个标准的日志记录 [`Logger`](https://docs.python.org/3/library/logging.html#logging.Logger)，有关更多信息，请查看官方 [`logging`](https://docs.python.org/3/library/logging.html#module-logging) 文档。
+
+请参见 [处理应用程序错误](https://flask.palletsprojects.com/en/3.0.x/errorhandling/)。
+
+### 挂钩 WSGI 中间件
+
+要将 WSGI 中间件添加到您的 Flask 应用程序，请包装应用程序的 `wsgi_app` 属性。例如，要应用 Werkzeug 的 [`ProxyFix`](https://werkzeug.palletsprojects.com/en/3.0.x/middleware/proxy_fix/#werkzeug.middleware.proxy_fix.ProxyFix) 中间件以在 Nginx 后运行：
+
+```python
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app)
+```
+
+包装 `app.wsgi_app` 而不是 `app` 意味着 `app` 仍然指向您的 Flask 应用程序，而不是中间件，因此您可以继续直接使用和配置 `app`。
+
+### 使用 Flask 扩展
+
+扩展是帮助您完成常见任务的软件包。例如，Flask-SQLAlchemy 提供了 SQLAlchemy 支持，使其与 Flask 一起使用变得简单易行。
+
+有关 Flask 扩展的更多信息，请参见 [扩展](https://flask.palletsprojects.com/en/3.0.x/extensions/)。
+
+### 部署到 Web 服务器
+
+准备好部署您的新 Flask 应用程序了吗？请参见 [部署到生产环境](https://flask.palletsprojects.com/en/3.0.x/deploying/)。
 
 
 
-
-
+---
 
 
 
@@ -1076,3 +1198,309 @@ def _handle_api_error(ex):
 ```
 
 详见 [Handling Application Errors](https://flask.palletsprojects.com/en/2.3.x/errorhandling/).
+
+
+
+---
+
+
+
+## SQLAlchemy 统一教程
+
+### 关于本文档
+
+SQLAlchemy 统一教程整合了 SQLAlchemy 的 Core 和 ORM 组件，作为 SQLAlchemy 的整体介绍。对于在 1.x 系列中使用 SQLAlchemy 的用户，在 [2.0 风格](https://docs.sqlalchemy.org/en/20/glossary.html#term-2.0-style) 的工作中，ORM 使用 Core 风格的查询构造 [`select()`](https://docs.sqlalchemy.org/en/20/core/selectable.html#sqlalchemy.sql.expression.select)，并且 Core 连接和 OReM 会话之间的事务语义是等价的。请注意每个部分的蓝色边框样式，它会告诉您某个特定主题的 “ORM 风格” 程度！
+
+已经熟悉 SQLAlchemy 的用户，尤其是那些希望将现有应用程序迁移到 SQLAlchemy 2.0 系列的用户，应查阅 [SQLAlchemy 2.0 - 主要迁移指南](https://docs.sqlalchemy.org/en/20/changelog/migration_20.html) 文档。
+
+对于新手来说，本文档有 **大量** 细节，但是到最后他们将被视为 **炼金术士**。
+
+SQLAlchemy 提供了两个不同的 API，一个建立在另一个之上。这些 API 被称为 **Core** 和 **ORM**。
+
+**SQLAlchemy Core** 是 SQLAlchemy 的基础架构，作为一个 “数据库工具包”。该库提供了管理数据库连接、与数据库查询和结果进行交互以及以编程方式构建 SQL 语句的工具。
+
+**主要是 Core 的部分** 将不会提及 ORM。这些部分中使用的 SQLAlchemy 构造将从命名空间导入。作为主题分类的额外指示，它们还将包括 **右侧的深蓝色边框**。使用 ORM 时，这些概念仍然存在，但在用户代码中不太显式。ORM 用户应阅读这些部分，但不应期望直接使用这些 API 进行 ORM 中心代码。`sqlalchemy`
+
+**SQLAlchemy ORM** 在 Core 的基础上提供了可选的 **对象关系映射** 功能。ORM 提供了一个额外的配置层，允许用户定义的 Python 类 **映射** 到数据库表和其他构造，以及称为 **Session** 的对象持久性机制。它然后扩展了 Core 级别的 SQL 表达语言，使得 SQL 查询可以用用户定义的对象来组成和调用。
+
+**主要是 ORM 的部分** 应 **标题中包含 “ORM” 一词**，以明确这是一个与 ORM 相关的主题。这些部分中使用的 SQLAlchemy 构造将从命名空间导入。最后，作为主题分类的额外指示，它们还将包括 **左侧的浅蓝色边框**。Core 用户可以跳过这些部分。`sqlalchemy.orm`
+
+**大多数** 教程部分讨论了 **也明确用于 ORM 的 Core 概念**。特别是 SQLAlchemy 2.0 在 ORM 中大大增加了 Core API 的使用。
+
+对于每个这些部分，将有 **介绍性文本** 讨论 ORM 用户在多大程度上应期望使用这些编程模式。这些部分中使用的 SQLAlchemy 构造将从命名空间导入，并可能同时使用一些构造。作为主题分类的额外指示，这些部分还将包括 **左侧的较薄的浅色边框和右侧的较厚的深色边框**。Core 和 ORM 用户应同样熟悉这些部分中的概念。`sqlalchemy``sqlalchemy.orm`
+
+### 教程概述
+
+教程将按照自然的学习顺序介绍这两个概念，首先是主要以 Core 为中心的方法，然后扩展到更多 ORM 为中心的概念。
+
+本教程的主要部分如下：
+
+- [建立连接 - 引擎](https://docs.sqlalchemy.org/en/20/tutorial/engine.html#tutorial-engine) - 所有 SQLAlchemy 应用程序都从一个 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine) 对象开始；这里是如何创建一个。
+- [使用事务和 DBAPI](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html#tutorial-working-with-transactions) - 介绍了 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine) 及其相关对象 [`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection) 和 [`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result) 的使用 API。内容主要以 Core 为中心，但 ORM 用户需要熟悉至少 [`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result) 对象。
+- [使用数据库元数据](https://docs.sqlalchemy.org/en/20/tutorial/metadata.html#tutorial-working-with-metadata) - SQLAlchemy 的 SQL 抽象以及 ORM 依赖于将数据库架构构造定义为 Python 对象的系统。本节介绍如何从 Core 和 ORM 角度做到这一点。
+- [处理数据](https://docs.sqlalchemy.org/en/20/tutorial/data.html#tutorial-working-with-data) - 在这里我们学习如何在数据库中创建、选择、更新和删除数据。所谓的 [CRUD](https://docs.sqlalchemy.org/en/20/glossary.html#term-CRUD) 操作在这里以 SQLAlchemy Core 方式给出，并提供指向其 ORM 对应部分的链接。在 [使用 SELECT 语句](https://docs.sqlalchemy.org/en/20/tutorial/data_select.html#tutorial-selecting-data) 中详细介绍的 SELECT 操作同样适用于 Core 和 ORM。
+- [使用 ORM 处理数据](https://docs.sqlalchemy.org/en/20/tutorial/orm_data_manipulation.html#tutorial-orm-data-manipulation) 涵盖了 ORM 的持久性框架；基本上是插入、更新和删除的 ORM 中心方法，以及如何处理事务。
+- [处理 ORM 相关对象](https://docs.sqlalchemy.org/en/20/tutorial/orm_related_objects.html#tutorial-orm-related-objects) 介绍了 [`relationship()`](https://docs.sqlalchemy.org/en/20/orm/relationship_api.html#sqlalchemy.orm.relationship) 构造的概念，并提供了如何使用它的简要概述，以及更深入文档的链接。
+- [进一步阅读](https://docs.sqlalchemy.org/en/20/tutorial/further_reading.html#tutorial-further-reading) 列出了几个主要的顶级文档部分，这些部分全面记录了本教程中介绍的概念。
+
+### 版本检查
+
+本教程使用一个称为 [doctest](https://docs.python.org/3/library/doctest.html) 的系统编写。所有用  编写的代码片段实际上都是 SQLAlchemy 测试套件的一部分，读者可以在自己的 Python 解释器中实时使用给出的代码示例。`>>>`
+
+如果要运行示例，建议读者进行快速检查，以验证我们使用的是 **SQLAlchemy 2.0 版本**：
+
+```python
+>>> import sqlalchemy
+>>> sqlalchemy.__version__  
+2.0.0
+```
+
+### 建立连接 - 引擎
+
+每个连接到数据库的 SQLAlchemy 应用程序都需要使用一个 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine)。这一简短的章节适用于所有人。
+
+任何 SQLAlchemy 应用程序的起点都是一个称为 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine) 的对象。这个对象充当与特定数据库连接的中央源，提供了一个工厂以及一个称为[连接池](https://docs.sqlalchemy.org/en/20/core/pooling.html)的持有空间来存储这些数据库连接。引擎通常是为特定数据库服务器创建的一次性全局对象，并使用一个 URL 字符串配置，该字符串将描述它应如何连接到数据库主机或后端。
+
+在本教程中，我们将使用仅限内存的 SQLite 数据库。这是一种无需实际设置预先存在的数据库即可测试事物的简便方法。使用 [`create_engine()`](https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine) 函数创建 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine):
+
+```
+>>> from sqlalchemy import create_engine
+>>> engine = create_engine("sqlite+pysqlite:///:memory:", echo=True)
+```
+
+传递给 [`create_engine`](https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine) 的主要参数是一个字符串 URL，如上所示，该字符串向 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine) 传达了三个重要信息：`"sqlite+pysqlite:///:memory:"`
+
+1. 我们在与哪种数据库通信？这是上述部分，将 SQLAlchemy 链接到称为 [dialect](https://docs.sqlalchemy.org/en/20/glossary.html#term-dialect) 的对象。`sqlite`
+2. 我们使用什么 [DBAPI](https://docs.sqlalchemy.org/en/20/glossary.html#term-DBAPI)？Python [DBAPI](https://docs.sqlalchemy.org/en/20/glossary.html#term-DBAPI) 是 SQLAlchemy 用来与特定数据库交互的第三方驱动程序。在这种情况下，我们使用的名称是，它在现代 Python 中使用的是 SQLite 的 [sqlite3](https://docs.python.org/library/sqlite3.html) 标准库接口。如果省略，SQLAlchemy 将使用为特定选择的数据库指定的默认 [DBAPI](https://docs.sqlalchemy.org/en/20/glossary.html#term-DBAPI)。`pysqlite`
+3. 我们如何定位数据库？在这种情况下，我们的 URL 包含短语，这是一个指示模块我们将使用仅限内存的数据库的标记。这种数据库非常适合实验，因为它不需要任何服务器，也不需要创建新文件。`/:memory:``sqlite3`
+
+懒连接
+
+当 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine) 首次由 [`create_engine()`](https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine) 返回时，它实际上还没有尝试连接到数据库；只有当它第一次被要求执行数据库任务时才会发生这种情况。这是一种称为 [懒初始化](https://docs.sqlalchemy.org/en/20/glossary.html#term-lazy-initialization) 的软件设计模式。
+
+我们还指定了一个参数 [`create_engine.echo`](https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine.params.echo)，它将指示 [`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine) 将其发出的所有 SQL 记录到一个 Python 记录器，该记录器将写入标准输出。此标志是一种更正式地设置 [Python 日志](https://docs.sqlalchemy.org/en/20/core/engines.html#dbengine-logging) 的简便方法，并且在脚本中进行实验时非常有用。许多 SQL 示例将包括此 SQL 日志输出，单击链接时将显示完整的 SQL 交互。`[SQL]`
+
+### 处理事务和DBAPI
+
+准备好[`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine)对象后，我们可以深入了解[`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine)的基本操作及其主要端点，即[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)和[`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result)。我们还会介绍ORM中这些对象的[外观模式](https://docs.sqlalchemy.org/en/20/glossary.html#term-facade)，即[`Session`](https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session)。
+
+**针对ORM读者的说明**
+
+在使用ORM时，[`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine)由[`Session`](https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session)管理。现代SQLAlchemy中的[`Session`](https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session)强调一种与下文讨论的[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)几乎相同的事务和SQL执行模式，因此尽管本小节主要讨论Core内容，但这里的所有概念对于ORM使用者也同样重要，推荐所有ORM学习者阅读。在本节末尾，我们将对比[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)和[`Session`](https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session)的执行模式。
+
+由于我们尚未介绍SQLAlchemy的主要功能——SQLAlchemy表达式语言，我们将在此包中使用一个简单的构造[`text()`](https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.text)来编写SQL语句作为**文本SQL**。请放心，在日常SQLAlchemy使用中，文本SQL是例外而非常规，但它始终可用。
+
+#### 获取连接
+
+[`Engine`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine)的目的是通过提供一个[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)对象来连接数据库。在直接使用Core时，所有与数据库的交互都是通过[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)对象进行的。由于[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)会创建一个对数据库的开放资源，我们希望将其使用限制在特定的上下文中。最好的方法是使用Python的上下文管理器，也称为[with语句](https://docs.python.org/3/reference/compound_stmts.html#with)。下面我们使用一个文本SQL语句来显示“Hello World”。文本SQL是使用名为[`text()`](https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.text)的构造创建的，我们将在稍后详细讨论：
+
+```python
+from sqlalchemy import text
+
+with engine.connect() as conn:
+    result = conn.execute(text("select 'hello world'"))
+    print(result.all())
+    
+BEGIN (implicit)
+select 'hello world'
+[...] ()
+[('hello world',)]
+ROLLBACK
+```
+
+在上面的例子中，上下文管理器创建了一个数据库连接并在事务中执行了操作。Python DBAPI的默认行为是始终有一个事务在进行；当连接被[释放](https://docs.sqlalchemy.org/en/20/glossary.html#term-released)时，会发出ROLLBACK来结束事务。事务**不会自动提交**；如果我们想提交数据，需要调用[`Connection.commit()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.commit)，我们将在下一节中看到。
+
+提示
+
+对于特殊情况，可以使用“自动提交”模式。[设置事务隔离级别包括DBAPI自动提交](https://docs.sqlalchemy.org/en/20/core/connections.html#dbapi-autocommit)部分讨论了这一点。
+
+我们的SELECT的结果返回在一个名为[`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result)的对象中，稍后会详细讨论。现在我们建议最好在“连接”块内使用该对象，而不要在连接的作用域之外使用它。
+
+#### 提交更改
+
+我们刚刚了解到DBAPI连接不会自动提交。如果我们想提交一些数据怎么办？我们可以修改上面的例子来创建一个表，插入一些数据，然后在拥有[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)对象的块**内部**使用[`Connection.commit()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.commit)方法提交事务：
+
+```python
+# "commit as you go"
+with engine.connect() as conn:
+    conn.execute(text("CREATE TABLE some_table (x int, y int)"))
+    conn.execute(
+        text("INSERT INTO some_table (x, y) VALUES (:x, :y)"),
+        [{"x": 1, "y": 1}, {"x": 2, "y": 4}],
+    )
+    conn.commit()
+    
+BEGIN (implicit)
+CREATE TABLE some_table (x int, y int)
+[...] ()
+<sqlalchemy.engine.cursor.CursorResult object at 0x...>
+INSERT INTO some_table (x, y) VALUES (?, ?)
+[...] [(1, 1), (2, 4)]
+<sqlalchemy.engine.cursor.CursorResult object at 0x...>
+COMMIT
+```
+
+在上面，我们执行了两个SQL语句，一个是“CREATE TABLE”语句[[1\]](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html#id2)，另一个是参数化的“INSERT”语句（稍后在[发送多个参数](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html#tutorial-multiple-parameters)中讨论参数化语法）。要提交我们在块内所做的工作，我们调用了[`Connection.commit()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.commit)方法，该方法提交事务。之后我们可以继续运行更多的SQL语句，并为这些语句再次调用[`Connection.commit()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.commit)。SQLAlchemy将这种风格称为**按需提交**。
+
+还有另一种提交数据的方式。我们可以在一开始就声明我们的“连接”块是一个事务块。为此，我们使用[`Engine.begin()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine.begin)方法获取连接，而不是[`Engine.connect()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Engine.connect)方法。此方法将管理[`Connection`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection)的范围，并在整个块内包含一个事务，如果块成功结束则进行COMMIT，如果引发异常则进行ROLLBACK。这种风格称为**一次性开始**：
+
+```python
+# "begin once"
+with engine.begin() as conn:
+    conn.execute(
+        text("INSERT INTO some_table (x, y) VALUES (:x, :y)"),
+        [{"x": 6, "y": 8}, {"x": 9, "y": 10}],
+    )
+    
+BEGIN (implicit)
+INSERT INTO some_table (x, y) VALUES (?, ?)
+[...] [(6, 8), (9, 10)]
+<sqlalchemy.engine.cursor.CursorResult object at 0x...>
+COMMIT
+```
+
+你应该主要倾向于使用“一次性开始”风格，因为它更简洁并在一开始就显示了整个块的意图。然而，在本教程中我们将使用“按需提交”风格，因为它在演示目的上更灵活。
+
+什么是“BEGIN (implicit)”？
+
+你可能注意到事务块开始时的日志行“BEGIN (implicit)”。这里的“implicit”意味着SQLAlchemy**并未实际向数据库发送任何命令**；它只是认为这是DBAPI的隐式事务的开始。你可以注册[事件钩子](https://docs.sqlalchemy.org/en/20/core/events.html#core-sql-events)来拦截此事件，例如。
+
+[[1](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html#id1)]
+
+[DDL](https://docs.sqlalchemy.org/en/20/glossary.html#term-DDL)指的是指示数据库创建、修改或删除模式级别结构（如表）的SQL子集。DDL（如“CREATE TABLE”）应在以COMMIT结尾的事务块中，因为许多数据库使用事务DDL，即模式更改在事务提交之前不会生效。然而，如我们稍后所见，我们通常让SQLAlchemy在更高级别的操作中为我们运行DDL序列，而无需担心COMMIT。
+
+#### 语句执行的基础知识
+
+我们已经看到了一些运行 SQL 语句的示例，这些示例利用了一个称为 [`Connection.execute()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.execute) 的方法，并结合一个称为 [`text()`](https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.text) 的对象，返回一个称为 [`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result) 的对象。在本节中，我们将更详细地说明这些组件的机制和交互。
+
+本节的大部分内容同样适用于现代 ORM 使用中的 [`Session.execute()`](https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session.execute) 方法，该方法的工作方式与 [`Connection.execute()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.execute) 非常相似，包括 ORM 结果行也使用与核心相同的 [`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result) 接口进行传递。
+
+##### 获取行
+
+我们将首先通过使用我们之前插入的行，运行一个针对我们创建的表的文本 SELECT 语句，更详细地说明 [`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result) 对象：
+
+```python
+>>> with engine.connect() as conn:
+...     result = conn.execute(text("SELECT x, y FROM some_table"))
+...     for row in result:
+...         print(f"x: {row.x}  y: {row.y}")
+BEGIN (implicit)
+SELECT x, y FROM some_table
+[...] ()
+x: 1  y: 1
+x: 2  y: 4
+x: 6  y: 8
+x: 9  y: 10
+ROLLBACK
+```
+
+上面的“SELECT”字符串选中了表中的所有行。返回的对象称为 [`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result)，它表示结果行的可迭代对象。
+
+[`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result) 有许多方法用于获取和转换行，例如前面说明的 [`Result.all()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result.all) 方法，它返回所有 [`Row`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Row) 对象的列表。它还实现了 Python 迭代器接口，因此我们可以直接迭代 [`Row`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Row) 对象的集合。
+
+[`Row`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Row) 对象本身旨在像 Python [named tuples](https://docs.python.org/3/library/collections.html#collections.namedtuple) 一样工作。下面我们说明了访问行的各种方式。
+
+- **元组赋值** - 这是最符合 Python 习惯的方式，即按位置分配变量：
+
+  ```
+  result = conn.execute(text("select x, y from some_table"))
+  
+  for x, y in result:
+      ...
+  ```
+
+- **整数索引** - 元组是 Python 序列，因此常规整数访问也是可行的：
+
+  ```
+  result = conn.execute(text("select x, y from some_table"))
+  
+  for row in result:
+      x = row[0]
+  ```
+
+- **属性名称** - 由于这些是 Python named tuples，因此元组具有与每一列的名称相匹配的动态属性名称。这些名称通常是 SQL 语句分配给每行列的名称。虽然它们通常是可以预测的，并且也可以通过标签进行控制，但在定义较少的情况下，它们可能会受到数据库特定行为的影响：
+
+  ```
+  result = conn.execute(text("select x, y from some_table"))
+  
+  for row in result:
+      y = row.y
+  
+      # 使用 Python f-strings
+      print(f"Row: {row.x} {y}")
+  ```
+
+- **映射访问** - 要将行接收为 Python **映射** 对象，这本质上是 Python 的 `dict` 对象的只读版本，可以使用 [`Result.mappings()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result.mappings) 修饰符将 [`Result`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result) 转换为 [`MappingResult`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.MappingResult) 对象；这是一个结果对象，返回类似字典的 [`RowMapping`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.RowMapping) 对象，而不是 [`Row`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Row) 对象：
+
+  ```
+  result = conn.execute(text("select x, y from some_table"))
+  
+  for dict_row in result.mappings():
+      x = dict_row["x"]
+      y = dict_row["y"]
+  ```
+
+##### 发送参数
+
+通常，SQL 语句会伴随需要与语句本身一起传递的数据，如我们在之前的 INSERT 示例中所见。因此，[`Connection.execute()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.execute) 方法也接受参数，这些参数称为 [绑定参数](https://docs.sqlalchemy.org/en/20/glossary.html#term-bound-parameters)。一个简单的例子可能是，如果我们只想限制我们的 SELECT 语句到符合特定条件的行，例如“y”值大于传递给函数的某个值的行。
+
+为了实现这一点，使 SQL 语句可以保持固定，并且驱动程序可以正确地清理值，我们向语句添加了一个 WHERE 条件，该条件命名了一个名为“y”的新参数；[`text()`](https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.text) 构造使用冒号格式“`:y`”来接受这些参数。然后，实际的“`:y`”值以字典形式作为第二个参数传递给 [`Connection.execute()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.execute)：
+
+```
+>>> with engine.connect() as conn:
+...     result = conn.execute(text("SELECT x, y FROM some_table WHERE y > :y"), {"y": 2})
+...     for row in result:
+...         print(f"x: {row.x}  y: {row.y}")
+BEGIN (implicit)
+SELECT x, y FROM some_table WHERE y > ?
+[...] (2,)
+x: 2  y: 4
+x: 6  y: 8
+x: 9  y: 10
+ROLLBACK
+```
+
+在记录的 SQL 输出中，我们可以看到绑定参数 `:y` 在发送到 SQLite 数据库时被转换为一个问号。这是因为 SQLite 数据库驱动程序使用一种称为“问号参数样式”的格式，这是 DBAPI 规范允许的六种不同格式之一。SQLAlchemy 将这些格式抽象为一种，即使用冒号的“命名”格式。
+
+总是使用绑定参数
+
+如本节开头所述，文本 SQL 不是我们使用 SQLAlchemy 的通常方式。然而，当使用文本 SQL 时，Python 字面值，即使是非字符串的整数或日期，也**绝不能直接转换为 SQL 字符串**；应**始终**使用参数。这是避免 SQL 注入攻击的最著名方法，当数据不受信任时尤其重要。此外，它还允许 SQLAlchemy 方言和/或 DBAPI 正确处理后端的输入。除纯文本 SQL 使用情况外，SQLAlchemy 的核心表达式 API 还确保 Python 字面值在适当情况下作为绑定参数传递。
+
+##### 发送多个参数
+
+在 [提交更改](https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html#tutorial-committing-data) 的示例中，我们执行了一个 INSERT 语句，看起来我们能够一次将多行插入数据库。对于 [DML](https://docs.sqlalchemy.org/en/20/glossary.html#term-DML) 语句，如“INSERT”、“UPDATE”和“DELETE”，我们可以通过传递一个字典列表而不是单个字典，向 [`Connection.execute()`](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Connection.execute) 方法发送**多个参数集**，这表明应该针对每个参数集多次调用单个 SQL 语句。这种执行方式称为 [executemany](https://docs.sqlalchemy.org/en/20/glossary.html#term-executemany)：
+
+```
+>>> with engine.connect() as conn:
+...     conn.execute(
+...         text("INSERT INTO some_table (x, y) VALUES (:x, :y)"),
+...         [{"x": 11, "y": 12}, {"x": 13, "y": 14}],
+...     )
+...     conn.commit()
+BEGIN (implicit)
+INSERT INTO some_table (x, y) VALUES (?, ?)
+[...] [(11, 12),
+
+ (13, 14)]
+<sqlalchemy.engine.cursor.CursorResult object at 0x...>
+COMMIT
+```
+
+上述操作相当于为每个参数集运行一次给定的 INSERT 语句，只不过操作会针对许多行进行优化以提高性能。
+
+“execute”和“executemany”之间的一个关键行为差异是，后者不支持返回结果行，即使语句包括 RETURNING 子句。唯一的例外是在使用核心 [`insert()`](https://docs.sqlalchemy.org/en/20/core/dml.html#sqlalchemy.sql.expression.insert) 构造时，稍后在 [使用 INSERT 语句](https://docs.sqlalchemy.org/en/20/tutorial/data_insert.html#tutorial-core-insert) 教程中介绍，该方法使用 [`Insert.returning()`](https://docs.sqlalchemy.org/en/20/core/dml.html#sqlalchemy.sql.expression.Insert.returning) 方法也表示 RETURNING。在这种情况下，SQLAlchemy 使用特殊逻辑重新组织 INSERT 语句，以便它可以针对许多行调用，同时仍然支持 RETURNING。
+
+另请参见
+
+[executemany](https://docs.sqlalchemy.org/en/20/glossary.html#term-executemany) - 在 [术语表](https://docs.sqlalchemy.org/en/20/glossary.html) 中，描述了 DBAPI 级别的 [cursor.executemany()](https://peps.python.org/pep-0249/#executemany) 方法，该方法用于大多数“executemany”执行。
+
+[INSERT 语句的“插入多个值”行为](https://docs.sqlalchemy.org/en/20/core/connections.html#engine-insertmanyvalues) - 在 [处理引擎和连接](https://docs.sqlalchemy.org/en/20/core/connections.html) 中，描述了 [`Insert.returning()`](https://docs.sqlalchemy.org/en/20/core/dml.html#sqlalchemy.sql.expression.Insert.returning) 用于支持带有“executemany”执行的结果集的专用逻辑。
+
+
+
+
+
+
+
+
+
